@@ -9,6 +9,7 @@ package com.metrolist.music.models
 enum class HomeSectionId(val id: String) {
     SPEED_DIAL("speed_dial"),
     SHORTCUTS("shortcuts"),
+    FOR_YOU("for_you"),
     NEW_RELEASES("new_releases"),
     YOUR_SHOWS("your_shows"),
     SPOTIFY_FEED("spotify_feed"),

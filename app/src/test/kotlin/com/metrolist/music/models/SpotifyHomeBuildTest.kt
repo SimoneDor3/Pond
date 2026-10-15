@@ -258,6 +258,7 @@ class SpotifyHomeBuildTest {
         HomeSectionId.SHORTCUTS,
         HomeSectionId.SPEED_DIAL,
         HomeSectionId.NEW_RELEASES,
+        HomeSectionId.FOR_YOU,
     )
 
     @Test
@@ -309,6 +310,7 @@ class SpotifyHomeBuildTest {
                 HomeSectionSetting(HomeSectionId.SPOTIFY_FEED, visible = false),
                 HomeSectionSetting(HomeSectionId.SPEED_DIAL, visible = true),
                 HomeSectionSetting(HomeSectionId.SHORTCUTS, visible = true),
+                HomeSectionSetting(HomeSectionId.FOR_YOU, visible = true),
                 HomeSectionSetting(HomeSectionId.NEW_RELEASES, visible = true),
                 HomeSectionSetting(HomeSectionId.YOUR_SHOWS, visible = true),
             ),

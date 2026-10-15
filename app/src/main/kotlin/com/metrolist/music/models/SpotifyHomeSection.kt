@@ -30,6 +30,7 @@ data class SpotifyHomeSection(
     val shortcuts: List<SpotifyHomeFeedItem> = emptyList(),
     val podcasts: List<HomePodcast> = emptyList(),
     val shows: List<PodcastItem> = emptyList(),
+    val mixed: List<MixedSuggestion> = emptyList(),
 )
 
 enum class SectionType {
@@ -39,6 +40,9 @@ enum class SectionType {
     PLAYLISTS,
     SHORTCUTS,
     SHOWS,
+
+    /** Suggested songs from Spotify and YouTube Music, drawn like [TRACKS]. */
+    MIXED_TRACKS,
 
     /** Placeholder for the speed dial, which the home screen renders from its own data. */
     SPEED_DIAL,
@@ -83,6 +87,7 @@ private const val NEW_RELEASES_TITLE = "spotify_new_releases"
  * Builds the visible Spotify home. Spotify provides the music [spotifySections];
  * podcasts come from YouTube Music: [newEpisodes] of followed [shows]. [localPlayback]
  * (video ID → song row) holds Meld's saved positions, which drive the dot and bar.
+ * [suggestions] are the mixed suggestion rows (see [buildSuggestionSections]), shown with music.
  * Sections follow the visible entries of [layout]; the music and podcasts filters keep
  * that order but drop the other kind of content (and the speed dial).
  */
@@ -93,6 +98,7 @@ fun buildSpotifyHome(
     localPlayback: Map<String, SongEntity>,
     filter: SpotifyHomeFilter,
     layout: List<HomeSectionSetting> = DefaultHomeLayout,
+    suggestions: List<SpotifyHomeSection> = emptyList(),
 ): List<SpotifyHomeSection> {
     val episodes = newEpisodes
         .distinctBy { it.id }
@@ -127,6 +133,7 @@ fun buildSpotifyHome(
                 SpotifyHomeSection(title = "", type = SectionType.SPEED_DIAL).takeIf { filter == SpotifyHomeFilter.ALL },
             )
             HomeSectionId.SHORTCUTS -> listOfNotNull(shortcuts)
+            HomeSectionId.FOR_YOU -> if (showMusic) suggestions else emptyList()
             HomeSectionId.YOUR_SHOWS -> listOfNotNull(showsSection?.takeIf { showPodcasts })
             HomeSectionId.NEW_RELEASES ->
                 if (showMusic) spotifySections.filter { it.title == NEW_RELEASES_TITLE } else emptyList()
