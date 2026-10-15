@@ -217,8 +217,10 @@ import com.metrolist.music.extensions.toMediaItem
 import com.metrolist.music.extensions.toPersistQueue
 import com.metrolist.music.extensions.toQueue
 import com.metrolist.music.lyrics.LyricsHelper
+import com.metrolist.music.models.MediaMetadata
 import com.metrolist.music.models.PersistPlayerState
 import com.metrolist.music.models.PersistQueue
+import com.metrolist.music.models.YOUTUBE_COMPLETED_FRACTION
 import com.metrolist.music.models.toMediaMetadata
 import com.metrolist.music.playback.alarm.MusicAlarmScheduler
 import com.metrolist.music.playback.alarm.MusicAlarmStore
@@ -2750,20 +2752,30 @@ class MusicService :
     }
 
     /**
-     * Restore podcast episode playback position from database.
-     * Seeks to saved position if available.
+     * Resumes a podcast episode from the furthest of its saved position and the progress YouTube
+     * reported for it.
      */
-    private fun restoreEpisodePosition(episodeId: String) {
-        scope.launch(Dispatchers.IO + SilentHandler) {
-            val savedPosition = database.getPlaybackPosition(episodeId)
-            if (savedPosition != null && savedPosition > 0) {
-                withContext(Dispatchers.Main) {
-                    // Only move forward: playback may already start further in, from YouTube's progress.
-                    if (player.currentMediaItem?.mediaId == episodeId && player.currentPosition < savedPosition) {
-                        player.seekTo(savedPosition)
-                        Timber.tag(TAG).d("Restored episode position: $episodeId to ${savedPosition}ms")
+    private fun restoreEpisodePosition(metadata: MediaMetadata) {
+        val episodeId = metadata.id
+        val youTubeFraction = metadata.playbackProgress?.takeIf { it > 0f && it < YOUTUBE_COMPLETED_FRACTION }
+        scope.launch(SilentHandler) {
+            val savedPosition = withContext(Dispatchers.IO) { database.getPlaybackPosition(episodeId) } ?: 0L
+            // YouTube reports a fraction, and its episode lists rarely carry a parseable length,
+            // so wait for the player to know the stream's duration.
+            val youTubePosition =
+                youTubeFraction?.let { fraction ->
+                    withTimeoutOrNull(15.seconds) {
+                        while (player.currentMediaItem?.mediaId == episodeId && player.duration == C.TIME_UNSET) {
+                            delay(200)
+                        }
+                        player.duration.takeIf { it != C.TIME_UNSET }?.let { (it * fraction).toLong() }
                     }
-                }
+                } ?: 0L
+            val target = maxOf(savedPosition, youTubePosition)
+            // Only move forward: playback may already start further in (ListQueue position).
+            if (target > 0 && player.currentMediaItem?.mediaId == episodeId && player.currentPosition < target) {
+                player.seekTo(target)
+                Timber.tag(TAG).d("Restored episode position: $episodeId to ${target}ms")
             }
         }
     }
@@ -2934,7 +2946,7 @@ class MusicService :
             previousEpisodeId = newMetadata.id
             scope.launch {
                 delay(100)
-                restoreEpisodePosition(newMetadata.id)
+                restoreEpisodePosition(newMetadata)
             }
         }
 

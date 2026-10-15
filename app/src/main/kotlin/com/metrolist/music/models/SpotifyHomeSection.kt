@@ -172,7 +172,7 @@ private fun List<HomeEpisode>.groupIntoPodcasts(shows: List<PodcastItem>): List<
 }
 
 // YouTube marks an episode as played around the end without always reaching 100%.
-private const val YOUTUBE_COMPLETED_FRACTION = 0.97f
+internal const val YOUTUBE_COMPLETED_FRACTION = 0.97f
 
 /** Merges Meld's [local] saved position with the progress YouTube reports for the episode. */
 internal fun SongItem.toHomeEpisode(local: SongEntity?): HomeEpisode {
