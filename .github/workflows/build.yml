@@ -29,6 +29,8 @@ jobs:
     if: github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      signed: ${{ steps.signing.outputs.available }}
 
     strategy:
       matrix:
@@ -42,6 +44,20 @@ jobs:
             variantName: Gms
 
     steps:
+      # Without the release keystore the build still runs as a compile check,
+      # but signing, the artifact upload and the nightly release are skipped.
+      - name: Check signing secrets
+        id: signing
+        env:
+          KEYSTORE: ${{ secrets.KEYSTORE }}
+        run: |
+          if [ -n "$KEYSTORE" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::The KEYSTORE secret is not set, so the release APK is not signed or published. Add KEYSTORE, KEY_ALIAS, KEYSTORE_PASSWORD and KEY_PASSWORD as repository secrets."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@v6
 
       - name: Set up JDK 21
@@ -75,6 +91,7 @@ jobs:
           CRASH_REPORT_REPO: ${{ vars.CRASH_REPORT_REPO || 'SimoneDor3/Pond' }}
 
       - name: Sign APK
+        if: steps.signing.outputs.available == 'true'
         uses: ilharp/sign-android-release@v2.0.0
         with:
           releaseDir: app/build/outputs/apk/${{ matrix.variant }}/release/
@@ -85,6 +102,7 @@ jobs:
           buildToolsVersion: 35.0.0
 
       - name: Move signed APK
+        if: steps.signing.outputs.available == 'true'
         run: |
           OUTPUT_DIR="app/build/outputs/apk/${{ matrix.variant }}/release"
           mkdir -p "$OUTPUT_DIR/out"
@@ -96,6 +114,7 @@ jobs:
           find "$OUTPUT_DIR" -name "*-signed.apk" -o -name "*-unsigned-signed.apk" | xargs -I{} mv {} "$OUTPUT_DIR/out/$TARGET_NAME"
 
       - name: Upload Signed APK
+        if: steps.signing.outputs.available == 'true'
         uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.variant == 'gms' && 'app-with-Google-Cast' || 'app-release' }}
@@ -165,7 +184,7 @@ jobs:
 
   publish_nightly:
     name: Publish Nightly Release
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && needs.build_release.outputs.signed == 'true'
     needs: [build_release, build_debug]
     runs-on: ubuntu-latest
     timeout-minutes: 5

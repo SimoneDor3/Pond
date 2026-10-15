@@ -36,6 +36,8 @@ data class MediaMetadata(
     val isEpisode: Boolean = false,
     val uploadEntityId: String? = null,
     val isrc: String? = null,
+    /** Listened fraction (0..1) YouTube reported for an episode, used to resume it. */
+    val playbackProgress: Float? = null,
 ) : Serializable {
     val isVideoSong: Boolean
         get() = musicVideoType != null && musicVideoType != MUSIC_VIDEO_TYPE_ATV
@@ -43,12 +45,26 @@ data class MediaMetadata(
     data class Artist(
         val id: String?,
         val name: String,
-    ) : Serializable
+    ) : Serializable {
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
 
     data class Album(
         val id: String,
         val title: String,
-    ) : Serializable
+    ) : Serializable {
+        companion object {
+            private const val serialVersionUID = 1L
+        }
+    }
+
+    // Fixed so a persisted queue stays readable after an app update; the computed default
+    // changes whenever this class (or its obfuscated form) changes.
+    companion object {
+        private const val serialVersionUID = 1L
+    }
 
     fun toSongEntity() =
         SongEntity(
@@ -149,7 +165,8 @@ fun SongItem.toMediaMetadata() =
         libraryRemoveToken = libraryRemoveToken,
         suggestedBy = null,
         isEpisode = isEpisode,
-        uploadEntityId = uploadEntityId
+        uploadEntityId = uploadEntityId,
+        playbackProgress = playbackProgress,
     )
 
 /**
@@ -179,4 +196,5 @@ fun EpisodeItem.toMediaMetadata() =
         isEpisode = true,
         libraryAddToken = libraryAddToken,
         libraryRemoveToken = libraryRemoveToken,
+        playbackProgress = playbackProgress,
     )

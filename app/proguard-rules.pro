@@ -131,6 +131,8 @@
 ## Queue Persistence Rules
 # Keep queue-related classes to prevent serialization issues in release builds
 -keep class com.metrolist.music.models.PersistQueue { *; }
+# Queue items: Java serialization matches fields by name, so they must not be obfuscated.
+-keep class com.metrolist.music.models.MediaMetadata** { *; }
 -keep class com.metrolist.music.models.PersistPlayerState { *; }
 -keep class com.metrolist.music.models.QueueData { *; }
 -keep class com.metrolist.music.models.QueueType { *; }
