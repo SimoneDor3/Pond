@@ -900,7 +900,8 @@ class HomeViewModel @Inject constructor(
                 type = SectionType.ARTISTS,
                 artists = artists.map(::toSpotifyArtist),
             )
-            SectionType.TRACKS, SectionType.SHORTCUTS, SectionType.SHOWS, SectionType.SPEED_DIAL -> null
+            SectionType.TRACKS, SectionType.SHORTCUTS, SectionType.SHOWS, SectionType.SPEED_DIAL,
+            SectionType.MIXED_TRACKS -> null
         }
     }
 
