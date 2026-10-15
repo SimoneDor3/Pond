@@ -52,6 +52,7 @@ import com.metrolist.music.constants.GridThumbnailHeight
 import com.metrolist.music.constants.ListItemHeight
 import com.metrolist.music.constants.ThumbnailCornerRadius
 import com.metrolist.music.models.HomePodcast
+import com.metrolist.music.models.MixedSuggestion
 import com.metrolist.music.models.SectionType
 import com.metrolist.music.models.SpotifyHomeSection
 import com.metrolist.music.utils.toAlbumItem
@@ -81,6 +82,8 @@ fun resolveSpotifySectionTitle(section: SpotifyHomeSection): String {
         }
         title == "spotify_top_artists" -> stringResource(R.string.spotify_top_artists)
         title == "spotify_made_for_you" -> stringResource(R.string.spotify_made_for_you)
+        title == "spotify_mix_made_for_you" -> stringResource(R.string.spotify_mix_made_for_you)
+        title == "spotify_jump_back_in" -> stringResource(R.string.spotify_jump_back_in)
         title == "spotify_discover" -> stringResource(R.string.spotify_discover)
         title == "spotify_your_playlists" -> stringResource(R.string.spotify_your_playlists)
         title == "spotify_new_releases" -> stringResource(R.string.spotify_new_releases)
@@ -129,6 +132,52 @@ fun SpotifyTrackSectionRow(
                         onClick = { onTrackClick(track) },
                         onLongClick = { onTrackLongClick(track) },
                     ),
+            )
+        }
+    }
+}
+
+/**
+ * Renders mixed Spotify and YouTube Music suggestions with the same 4-row grid as
+ * [SpotifyTrackSectionRow], so both sources look alike.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun SpotifyMixedTrackSectionRow(
+    suggestions: List<MixedSuggestion>,
+    horizontalItemWidth: Dp,
+    isPlaying: Boolean,
+    onSuggestionClick: (MixedSuggestion) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyHorizontalGrid(
+        state = rememberLazyGridState(),
+        rows = GridCells.Fixed(4),
+        contentPadding = WindowInsets.systemBars
+            .only(WindowInsetsSides.Horizontal)
+            .asPaddingValues(),
+        modifier = modifier
+            .fillMaxWidth()
+            .height(ListItemHeight * 4)
+    ) {
+        items(
+            items = suggestions,
+            key = { "mixed_suggestion_${it.javaClass.simpleName}_${it.id}" }
+        ) { suggestion ->
+            val songItem = remember(suggestion) {
+                when (suggestion) {
+                    is MixedSuggestion.FromYouTube -> suggestion.song
+                    is MixedSuggestion.FromSpotify -> suggestion.track.toSongItem()
+                }
+            }
+            YouTubeListItem(
+                item = songItem,
+                isActive = false,
+                isPlaying = isPlaying,
+                isSwipeable = false,
+                modifier = Modifier
+                    .width(horizontalItemWidth)
+                    .combinedClickable(onClick = { onSuggestionClick(suggestion) }),
             )
         }
     }

@@ -62,6 +62,17 @@ import com.metrolist.music.models.SimilarRecommendation
 import com.metrolist.music.models.SpotifyHomeFilter
 import com.metrolist.music.models.SpotifyHomeSection
 import com.metrolist.music.models.buildSpotifyHome
+import com.metrolist.music.constants.SuggestionSourceKey
+import com.metrolist.music.constants.SuggestionYouTubeSharePercentKey
+import com.metrolist.music.models.DEFAULT_YOUTUBE_SHARE_PERCENT
+import com.metrolist.music.models.SuggestionConfig
+import com.metrolist.music.models.SuggestionInputs
+import com.metrolist.music.models.SuggestionSource
+import com.metrolist.music.models.buildSuggestionSections
+import com.metrolist.music.models.youTubeShareFromPercent
+import com.metrolist.music.playback.SpotifyProfileCache
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.withTimeoutOrNull
 import com.metrolist.music.models.deserializeHomeLayout
 import com.metrolist.music.ui.screens.wrapped.WrappedAudioService
 import com.metrolist.music.ui.screens.wrapped.WrappedManager
@@ -106,6 +117,11 @@ data class CommunityPlaylistItem(
     val playlist: PlaylistItem,
     val songs: List<SongItem>
 )
+
+private const val SUGGESTIONS_TIMEOUT_MS = 20_000L
+private const val SUGGESTION_TOP_ARTISTS = 20
+private const val SUGGESTION_SEED_ARTISTS = 3
+private const val SUGGESTION_RECENT_TRACKS = 10
 
 internal fun buildSpeedDialItems(
     pinned: List<YTItem>,
@@ -283,6 +299,7 @@ class HomeViewModel @Inject constructor(
 
     // Spotify home sections: populated when UseSpotifyHomeKey is enabled
     val spotifyHomeSections = MutableStateFlow<List<SpotifyHomeSection>?>(null)
+    private val suggestionSections = MutableStateFlow<List<SpotifyHomeSection>>(emptyList())
     val podcastNewEpisodes = MutableStateFlow<List<SongItem>>(emptyList())
     val spotifyHomeFilter = MutableStateFlow(SpotifyHomeFilter.ALL)
 
@@ -300,14 +317,14 @@ class HomeViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val visibleSpotifyHomeSections: StateFlow<List<SpotifyHomeSection>?> =
         combine(
-            spotifyHomeSections,
+            combine(spotifyHomeSections, suggestionSections, ::Pair),
             podcastNewEpisodes,
             savedPodcastShows,
             combine(spotifyHomeFilter, showPodcastSuggestions, homeLayout, ::Triple),
             podcastNewEpisodes.flatMapLatest { episodes ->
                 if (episodes.isEmpty()) flowOf(emptyList()) else database.songEntitiesByIds(episodes.map { it.id })
             },
-        ) { sections, episodes, shows, (filter, showPodcasts, layout), localPlayback ->
+        ) { (sections, suggestions), episodes, shows, (filter, showPodcasts, layout), localPlayback ->
             sections?.let {
                 buildSpotifyHome(
                     it,
@@ -316,6 +333,7 @@ class HomeViewModel @Inject constructor(
                     localPlayback.associateBy { song -> song.id },
                     if (showPodcasts) filter else SpotifyHomeFilter.ALL,
                     layout,
+                    suggestions,
                 )
             }
         }.stateIn(viewModelScope, SharingStarted.Lazily, null)
@@ -713,6 +731,10 @@ class HomeViewModel @Inject constructor(
             viewModelScope.launch(Dispatchers.IO) { loadYouTubePodcasts() }
         }
 
+        // Suggestions need extra Spotify and YouTube calls; they fill in after the feed.
+        val hideVideoSongs = context.dataStore.get(HideVideoSongsKey, false)
+        viewModelScope.launch(Dispatchers.IO) { loadSuggestions(hideExplicit, hideVideoSongs) }
+
         try {
             // These two sources are independent — fetch them concurrently and then
             // assemble the sections in a fixed display order. Previously they ran
@@ -767,6 +789,73 @@ class HomeViewModel @Inject constructor(
 
         homePage.value = null
         explorePage.value = null
+    }
+
+    /**
+     * Builds the "Made for you", "Because you like" and "Jump back in" rows from the Spotify
+     * taste profile and, unless the user picked Spotify only, YouTube Music's live
+     * recommendations. Each source is fetched in parallel and may fail on its own.
+     */
+    private suspend fun loadSuggestions(hideExplicit: Boolean, hideVideoSongs: Boolean) {
+        val prefs = context.dataStore.data.first()
+        val source = prefs[SuggestionSourceKey].toEnum(SuggestionSource.MIXED)
+        val sharePercent = prefs[SuggestionYouTubeSharePercentKey] ?: DEFAULT_YOUTUBE_SHARE_PERCENT
+        val mixed = source == SuggestionSource.MIXED
+
+        val inputs = withTimeoutOrNull(SUGGESTIONS_TIMEOUT_MS) {
+            val tracks = SpotifyProfileCache.getTopTracks(context, database)
+            val artists = SpotifyProfileCache.getTopArtists(context, database, limit = SUGGESTION_TOP_ARTISTS)
+            coroutineScope {
+                // Spotify: the top tracks of the user's favourite artists, keyed by artist.
+                val artistTracks = artists.take(SUGGESTION_SEED_ARTISTS).map { artist ->
+                    async { artist to Spotify.artistTopTracks(artist.id).getOrNull()?.tracks.orEmpty() }
+                }
+                val liveYouTube = async {
+                    if (!mixed) return@async emptyList<SongItem>()
+                    val home = YouTube.home().getOrNull()?.sections.orEmpty()
+                        .flatMap { it.items }.filterIsInstance<SongItem>()
+                    val lastPlayed = database.latestEvent().first()?.song?.id
+                    (lastPlayed?.let { youTubeRelatedSongs(it) }.orEmpty() + home)
+                }
+                val spotifyByArtist = artistTracks.awaitAll()
+                // YouTube Music's related songs for each seed artist, seeded by their top track.
+                val relatedByArtist: Map<String, List<SongItem>> = if (!mixed) emptyMap() else spotifyByArtist.map { (artist, top) ->
+                    async {
+                        val seed = top.firstOrNull() ?: return@async null
+                        val videoId = YouTube.search("${seed.name} ${artist.name}", YouTube.SearchFilter.FILTER_SONG)
+                            .getOrNull()?.items?.firstOrNull { it is SongItem }?.id ?: return@async null
+                        artist.name to youTubeRelatedSongs(videoId)
+                    }
+                }.awaitAll().filterNotNull().toMap()
+
+                SuggestionInputs(
+                    topTracks = tracks.drop(SUGGESTION_RECENT_TRACKS),
+                    recentTopTracks = tracks.take(SUGGESTION_RECENT_TRACKS),
+                    topArtists = artists,
+                    liveSpotify = spotifyByArtist.flatMap { it.second },
+                    liveYouTube = liveYouTube.await(),
+                    relatedByArtist = relatedByArtist,
+                )
+            }
+        }
+        if (inputs == null) {
+            Timber.w("spotifyHome: suggestions timed out")
+            return
+        }
+
+        val config = SuggestionConfig(
+            source = source,
+            youTubeShare = youTubeShareFromPercent(sharePercent),
+            hideExplicit = hideExplicit,
+            hideVideoSongs = hideVideoSongs,
+        )
+        suggestionSections.value = buildSuggestionSections(inputs, config)
+        Timber.d("spotifyHome: suggestions source=$source rows=${suggestionSections.value.size}")
+    }
+
+    private suspend fun youTubeRelatedSongs(videoId: String): List<SongItem> {
+        val endpoint = YouTube.next(WatchEndpoint(videoId = videoId)).getOrNull()?.relatedEndpoint ?: return emptyList()
+        return YouTube.related(endpoint).getOrNull()?.songs.orEmpty()
     }
 
     /**
