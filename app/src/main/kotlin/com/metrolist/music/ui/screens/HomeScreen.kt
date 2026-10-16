@@ -133,7 +133,6 @@ import com.metrolist.music.db.entities.PlaylistSongMap
 import com.metrolist.music.db.entities.Song
 import com.metrolist.music.extensions.toMediaItem
 import com.metrolist.music.models.toMediaMetadata
-import com.metrolist.music.models.MixedSuggestion
 import com.metrolist.music.playback.queues.ListQueue
 import com.metrolist.music.playback.queues.LocalAlbumRadio
 import com.metrolist.music.playback.queues.YouTubeAlbumRadio
@@ -161,7 +160,7 @@ import com.metrolist.music.ui.component.SpotifyArtistSectionRow
 import com.metrolist.music.ui.component.SpotifyPlaylistSectionRow
 import com.metrolist.music.ui.component.SpotifyShortcutGrid
 import com.metrolist.music.ui.component.SpotifyTrackSectionRow
-import com.metrolist.music.ui.component.SpotifyMixedTrackSectionRow
+import com.metrolist.music.ui.component.SpotifyCraftedMixRow
 import com.metrolist.music.ui.component.resolveSpotifySectionTitle
 import com.metrolist.music.ui.component.shimmer.GridItemPlaceHolder
 import com.metrolist.music.ui.component.shimmer.ShimmerHost
@@ -2708,26 +2707,10 @@ fun HomeScreen(
                                         }
                                     }
                                 }
-                                SectionType.MIXED_TRACKS -> {
-                                    SpotifyMixedTrackSectionRow(
-                                        suggestions = section.mixed,
-                                        horizontalItemWidth = horizontalLazyGridItemWidth,
-                                        isPlaying = isPlaying,
-                                        onSuggestionClick = { suggestion ->
-                                            // Both start a radio from the song, like a Spotify track row.
-                                            playerConnection.playQueue(
-                                                when (suggestion) {
-                                                    is MixedSuggestion.FromYouTube ->
-                                                        YouTubeQueue.radio(suggestion.song.toMediaMetadata())
-                                                    is MixedSuggestion.FromSpotify -> SpotifyQueue(
-                                                        initialTrack = suggestion.track,
-                                                        mapper = spotifyMapper,
-                                                        context = viewModel.context,
-                                                        database = database,
-                                                    )
-                                                },
-                                            )
-                                        },
+                                SectionType.CRAFTED_MIXES -> {
+                                    SpotifyCraftedMixRow(
+                                        mixes = section.crafted,
+                                        onMixClick = { playlist -> navigateToPlaylist(playlist.id) },
                                         modifier = Modifier.animateItem(),
                                     )
                                 }

@@ -1104,8 +1104,7 @@
     <string name="new_releases_following">Following</string>
     <string name="new_releases_discover">Discover</string>
     <string name="spotify_because_you_like">Because you like %s</string>
-    <string name="spotify_mix_made_for_you">Made for you</string>
-    <string name="spotify_jump_back_in">Jump back in</string>
+    <string name="crafted_for_you">Crafted for you</string>
     <string name="suggestion_source">Suggestions source</string>
     <string name="suggestion_source_spotify_only">Spotify only</string>
     <string name="suggestion_source_mixed">Spotify + YouTube Music</string>
@@ -1219,5 +1218,5 @@
     <string name="home_sections_reorder_hint">Long press and drag to reorder</string>
     <string name="home_section_shortcuts">Shortcuts and podcasts</string>
     <string name="home_section_spotify_feed">Spotify recommendations</string>
-    <string name="home_section_for_you">Made for you</string>
+    <string name="home_section_for_you">Crafted for you</string>
 </resources>
