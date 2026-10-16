@@ -40,9 +40,29 @@ const val CRAFTED_FOR_YOU_TITLE = "crafted_for_you"
 const val DEFAULT_YOUTUBE_SHARE_PERCENT = 50
 
 // YouTube Music's personal mixes (My Supermix, Discover Mix, Replay Mix, …) use this playlist ID prefix.
-private const val YOUTUBE_PERSONAL_MIX_PREFIX = "RDTMAK"
+const val YOUTUBE_PERSONAL_MIX_PREFIX = "RDTMAK"
 
 fun youTubeShareFromPercent(percent: Int): Float = percent.coerceIn(0, 100) / 100f
+
+/** The playlists on one page of the YouTube Music home, and the continuation to the next page. */
+data class YouTubeHomePage(val playlists: List<PlaylistItem>, val continuation: String?)
+
+/**
+ * Reads YouTube Music home pages until a personal mix shows up ("Mixed for you" is often past the
+ * first page), the last page is reached, a page fails ([fetchPage] returns null) or [maxPages] are read.
+ * Inline so [fetchPage] may suspend.
+ */
+inline fun collectYouTubeHomePlaylists(maxPages: Int, fetchPage: (continuation: String?) -> YouTubeHomePage?): List<PlaylistItem> {
+    val playlists = mutableListOf<PlaylistItem>()
+    var continuation: String? = null
+    repeat(maxPages) {
+        val page = fetchPage(continuation) ?: return playlists
+        playlists += page.playlists
+        if (playlists.any { it.id.startsWith(YOUTUBE_PERSONAL_MIX_PREFIX) }) return playlists
+        continuation = page.continuation ?: return playlists
+    }
+    return playlists
+}
 
 /**
  * Picks the playlists Spotify made for the user from its home feed and, unless the source is

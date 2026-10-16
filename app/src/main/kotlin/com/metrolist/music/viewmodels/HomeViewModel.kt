@@ -63,6 +63,8 @@ import com.metrolist.music.models.SpotifyHomeFilter
 import com.metrolist.music.models.SpotifyHomeSection
 import com.metrolist.music.models.buildSpotifyHome
 import com.metrolist.music.models.buildCraftedForYou
+import com.metrolist.music.models.collectYouTubeHomePlaylists
+import com.metrolist.music.models.YouTubeHomePage
 import com.metrolist.music.models.CraftedMix
 import com.metrolist.music.models.CraftedConfig
 import com.metrolist.music.constants.SuggestionSourceKey
@@ -116,7 +118,8 @@ data class CommunityPlaylistItem(
     val songs: List<SongItem>
 )
 
-private const val CRAFTED_YOUTUBE_TIMEOUT_MS = 10_000L
+private const val CRAFTED_YOUTUBE_TIMEOUT_MS = 15_000L
+private const val CRAFTED_YOUTUBE_MAX_PAGES = 5
 
 internal fun buildSpeedDialItems(
     pinned: List<YTItem>,
@@ -795,8 +798,15 @@ class HomeViewModel @Inject constructor(
 
         val youTubePlaylists: List<PlaylistItem> = if (source == SuggestionSource.MIXED) {
             withTimeoutOrNull(CRAFTED_YOUTUBE_TIMEOUT_MS) {
-                YouTube.home().onFailure { Timber.w(it, "spotifyHome: YouTube home() for mixes FAILED") }.getOrNull()
-            }?.sections.orEmpty().flatMap { it.items }.filterIsInstance<PlaylistItem>()
+                collectYouTubeHomePlaylists(maxPages = CRAFTED_YOUTUBE_MAX_PAGES) { continuation ->
+                    YouTube.home(continuation = continuation)
+                        .onFailure { Timber.w(it, "spotifyHome: YouTube home() for mixes FAILED") }
+                        .getOrNull()
+                        ?.let { page ->
+                            YouTubeHomePage(page.sections.flatMap { it.items }.filterIsInstance<PlaylistItem>(), page.continuation)
+                        }
+                }
+            }.orEmpty()
         } else {
             emptyList()
         }
