@@ -79,6 +79,39 @@ class CraftedForYouTest {
         assertTrue(buildCraftedForYou(emptyList(), emptyList(), mixed()).isEmpty())
     }
 
+    // --- Paging the YouTube Music home ---
+
+    /** Fake home: page index → (playlists, next continuation). */
+    private fun pager(vararg pages: List<PlaylistItem>): Pair<MutableList<String?>, (String?) -> YouTubeHomePage?> {
+        val requested = mutableListOf<String?>()
+        return requested to { continuation ->
+            requested += continuation
+            val index = continuation?.removePrefix("page")?.toInt() ?: 0
+            pages.getOrNull(index)?.let { YouTubeHomePage(it, continuation = "page${index + 1}".takeIf { index + 1 < pages.size }) }
+        }
+    }
+
+    @Test
+    fun `home pages are read until the personal mixes show up`() {
+        val (requested, fetch) = pager(listOf(youTube("PLa")), listOf(youTube("PLb")), listOf(youTube("RDTMAK1")), listOf(youTube("RDTMAK2")))
+        val playlists = collectYouTubeHomePlaylists(maxPages = 5, fetchPage = fetch)
+        assertEquals(listOf(null, "page1", "page2"), requested)
+        assertEquals(listOf("PLa", "PLb", "RDTMAK1"), playlists.map { it.id })
+    }
+
+    @Test
+    fun `home paging stops at the page limit, the last page, or a failed page`() {
+        val (limited, fetchMany) = pager(*(1..10).map { listOf(youTube("PL$it")) }.toTypedArray())
+        collectYouTubeHomePlaylists(maxPages = 3, fetchPage = fetchMany)
+        assertEquals(3, limited.size)
+
+        val (short, fetchShort) = pager(listOf(youTube("PLa")))
+        assertEquals(listOf("PLa"), collectYouTubeHomePlaylists(maxPages = 5, fetchPage = fetchShort).map { it.id })
+        assertEquals(1, short.size)
+
+        assertTrue(collectYouTubeHomePlaylists(maxPages = 5) { null }.isEmpty())
+    }
+
     @Test
     fun `youTube share setting is clamped to 0-100 percent`() {
         assertEquals(0f, youTubeShareFromPercent(-5), 0f)
