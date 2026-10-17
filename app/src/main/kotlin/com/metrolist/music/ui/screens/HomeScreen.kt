@@ -160,6 +160,7 @@ import com.metrolist.music.ui.component.SpotifyArtistSectionRow
 import com.metrolist.music.ui.component.SpotifyPlaylistSectionRow
 import com.metrolist.music.ui.component.SpotifyShortcutGrid
 import com.metrolist.music.ui.component.SpotifyTrackSectionRow
+import com.metrolist.music.ui.component.SpotifyCraftedMixRow
 import com.metrolist.music.ui.component.resolveSpotifySectionTitle
 import com.metrolist.music.ui.component.shimmer.GridItemPlaceHolder
 import com.metrolist.music.ui.component.shimmer.ShimmerHost
@@ -2705,6 +2706,13 @@ fun HomeScreen(
                                             ytGridItem(show)
                                         }
                                     }
+                                }
+                                SectionType.CRAFTED_MIXES -> {
+                                    SpotifyCraftedMixRow(
+                                        mixes = section.crafted,
+                                        onMixClick = { playlist -> navigateToPlaylist(playlist.id) },
+                                        modifier = Modifier.animateItem(),
+                                    )
                                 }
                                 SectionType.SPEED_DIAL -> Unit
                             }

@@ -75,6 +75,16 @@ import com.metrolist.music.constants.SpotifyHomeOnlyKey
 import com.metrolist.music.constants.UseSpotifyHomeKey
 import com.metrolist.music.constants.UseSpotifySearchKey
 import com.metrolist.music.models.MediaMetadata
+import androidx.compose.material3.Slider
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.metrolist.music.constants.SuggestionSourceKey
+import com.metrolist.music.constants.SuggestionYouTubeSharePercentKey
+import com.metrolist.music.models.DEFAULT_YOUTUBE_SHARE_PERCENT
+import com.metrolist.music.models.SuggestionSource
+import com.metrolist.music.ui.component.DefaultDialog
+import kotlin.math.roundToInt
 import com.metrolist.music.playback.SpotifyMetadataRegistry
 import com.metrolist.music.playback.SpotifyProfileCache
 import com.metrolist.music.playback.SpotifyYouTubeMapper
@@ -228,6 +238,8 @@ fun SpotifySettings(
                     checked = spotifyHomeOnly,
                     onCheckedChange = onSpotifyHomeOnlyChange,
                 )
+
+                SuggestionPreferences()
             }
 
             val (syncLikes, onSyncLikesChange) = rememberPreference(
@@ -751,3 +763,94 @@ internal suspend fun runInitialSpotifyLikeSync(
         SpotifyLikeSyncState.isSyncing.value = false
     }
 }
+
+/** Source of the home suggestion rows and, when mixed, how much of each row YouTube Music fills. */
+@Composable
+private fun SuggestionPreferences() {
+    var source by rememberEnumPreference(SuggestionSourceKey, defaultValue = SuggestionSource.MIXED)
+    val (sharePercent, onSharePercentChange) = rememberPreference(
+        key = SuggestionYouTubeSharePercentKey,
+        defaultValue = DEFAULT_YOUTUBE_SHARE_PERCENT,
+    )
+    var showSourceDialog by rememberSaveable { mutableStateOf(false) }
+    var showShareDialog by rememberSaveable { mutableStateOf(false) }
+
+    if (showSourceDialog) {
+        EnumDialog(
+            onDismiss = { showSourceDialog = false },
+            onSelect = {
+                source = it
+                showSourceDialog = false
+            },
+            title = stringResource(R.string.suggestion_source),
+            current = source,
+            values = SuggestionSource.entries.toList(),
+            valueText = { it.label() },
+        )
+    }
+
+    PreferenceEntry(
+        title = { Text(stringResource(R.string.suggestion_source)) },
+        description = source.label(),
+        onClick = { showSourceDialog = true },
+    )
+
+    if (source == SuggestionSource.MIXED) {
+        if (showShareDialog) {
+            var tempShare by remember { mutableIntStateOf(sharePercent) }
+            DefaultDialog(
+                onDismiss = { showShareDialog = false },
+                buttons = {
+                    TextButton(onClick = { showShareDialog = false }) {
+                        Text(stringResource(android.R.string.cancel))
+                    }
+                    TextButton(
+                        onClick = {
+                            onSharePercentChange(tempShare)
+                            showShareDialog = false
+                        },
+                    ) {
+                        Text(stringResource(android.R.string.ok))
+                    }
+                },
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(16.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.suggestion_youtube_share),
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.padding(bottom = 16.dp),
+                    )
+                    Text(
+                        text = stringResource(R.string.suggestion_youtube_share_value, tempShare, 100 - tempShare),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(bottom = 16.dp),
+                    )
+                    Slider(
+                        value = tempShare.toFloat(),
+                        onValueChange = { tempShare = it.roundToInt() },
+                        valueRange = 0f..100f,
+                        steps = 9,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+
+        PreferenceEntry(
+            title = { Text(stringResource(R.string.suggestion_youtube_share)) },
+            description = stringResource(R.string.suggestion_youtube_share_value, sharePercent, 100 - sharePercent),
+            onClick = { showShareDialog = true },
+        )
+    }
+}
+
+@Composable
+private fun SuggestionSource.label() = stringResource(
+    when (this) {
+        SuggestionSource.SPOTIFY_ONLY -> R.string.suggestion_source_spotify_only
+        SuggestionSource.MIXED -> R.string.suggestion_source_mixed
+    },
+)

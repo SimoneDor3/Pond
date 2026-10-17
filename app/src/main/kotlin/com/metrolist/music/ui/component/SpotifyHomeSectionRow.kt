@@ -47,13 +47,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
+import com.metrolist.innertube.models.Artist
+import com.metrolist.innertube.models.PlaylistItem
 import com.metrolist.music.R
 import com.metrolist.music.constants.GridThumbnailHeight
 import com.metrolist.music.constants.ListItemHeight
 import com.metrolist.music.constants.ThumbnailCornerRadius
 import com.metrolist.music.models.HomePodcast
+import com.metrolist.music.models.CraftedMix
 import com.metrolist.music.models.SectionType
 import com.metrolist.music.models.SpotifyHomeSection
+import com.metrolist.music.utils.SPOTIFY_ID_PREFIX
 import com.metrolist.music.utils.toAlbumItem
 import com.metrolist.music.utils.toArtistItem
 import com.metrolist.music.utils.toPlaylistItem
@@ -81,6 +85,7 @@ fun resolveSpotifySectionTitle(section: SpotifyHomeSection): String {
         }
         title == "spotify_top_artists" -> stringResource(R.string.spotify_top_artists)
         title == "spotify_made_for_you" -> stringResource(R.string.spotify_made_for_you)
+        title == "crafted_for_you" -> stringResource(R.string.crafted_for_you)
         title == "spotify_discover" -> stringResource(R.string.spotify_discover)
         title == "spotify_your_playlists" -> stringResource(R.string.spotify_your_playlists)
         title == "spotify_new_releases" -> stringResource(R.string.spotify_new_releases)
@@ -132,6 +137,50 @@ fun SpotifyTrackSectionRow(
             )
         }
     }
+}
+
+/**
+ * Renders the "Crafted for you" mixes from both services as one row of playlist cards,
+ * styled like [SpotifyPlaylistSectionRow].
+ */
+@Composable
+fun SpotifyCraftedMixRow(
+    mixes: List<CraftedMix>,
+    onMixClick: (PlaylistItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 12.dp),
+        modifier = modifier,
+    ) {
+        items(
+            items = mixes,
+            key = { "crafted_mix_${it.javaClass.simpleName}_${it.id}" }
+        ) { mix ->
+            val playlistItem = remember(mix) { mix.toPlaylistItem() }
+            YouTubeGridItem(
+                item = playlistItem,
+                isActive = false,
+                isPlaying = false,
+                modifier = Modifier.clickable { onMixClick(playlistItem) },
+            )
+        }
+    }
+}
+
+/** Spotify mixes get the "spotify:" ID prefix so playlist navigation opens the Spotify screen. */
+private fun CraftedMix.toPlaylistItem(): PlaylistItem = when (this) {
+    is CraftedMix.YouTube -> playlist
+    is CraftedMix.Spotify -> PlaylistItem(
+        id = "$SPOTIFY_ID_PREFIX${playlist.id}",
+        title = playlist.name,
+        author = playlist.ownerName?.let { Artist(name = it, id = null) },
+        songCountText = null,
+        thumbnail = playlist.imageUrl,
+        playEndpoint = null,
+        shuffleEndpoint = null,
+        radioEndpoint = null,
+    )
 }
 
 /**

@@ -62,6 +62,17 @@ import com.metrolist.music.models.SimilarRecommendation
 import com.metrolist.music.models.SpotifyHomeFilter
 import com.metrolist.music.models.SpotifyHomeSection
 import com.metrolist.music.models.buildSpotifyHome
+import com.metrolist.music.models.buildCraftedForYou
+import com.metrolist.music.models.collectYouTubeHomePlaylists
+import com.metrolist.music.models.YouTubeHomePage
+import com.metrolist.music.models.CraftedMix
+import com.metrolist.music.models.CraftedConfig
+import com.metrolist.music.constants.SuggestionSourceKey
+import com.metrolist.music.constants.SuggestionYouTubeSharePercentKey
+import com.metrolist.music.models.DEFAULT_YOUTUBE_SHARE_PERCENT
+import com.metrolist.music.models.SuggestionSource
+import com.metrolist.music.models.youTubeShareFromPercent
+import kotlinx.coroutines.withTimeoutOrNull
 import com.metrolist.music.models.deserializeHomeLayout
 import com.metrolist.music.ui.screens.wrapped.WrappedAudioService
 import com.metrolist.music.ui.screens.wrapped.WrappedManager
@@ -106,6 +117,9 @@ data class CommunityPlaylistItem(
     val playlist: PlaylistItem,
     val songs: List<SongItem>
 )
+
+private const val CRAFTED_YOUTUBE_TIMEOUT_MS = 15_000L
+private const val CRAFTED_YOUTUBE_MAX_PAGES = 5
 
 internal fun buildSpeedDialItems(
     pinned: List<YTItem>,
@@ -283,6 +297,7 @@ class HomeViewModel @Inject constructor(
 
     // Spotify home sections: populated when UseSpotifyHomeKey is enabled
     val spotifyHomeSections = MutableStateFlow<List<SpotifyHomeSection>?>(null)
+    private val craftedMixes = MutableStateFlow<List<CraftedMix>>(emptyList())
     val podcastNewEpisodes = MutableStateFlow<List<SongItem>>(emptyList())
     val spotifyHomeFilter = MutableStateFlow(SpotifyHomeFilter.ALL)
 
@@ -300,14 +315,14 @@ class HomeViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val visibleSpotifyHomeSections: StateFlow<List<SpotifyHomeSection>?> =
         combine(
-            spotifyHomeSections,
+            combine(spotifyHomeSections, craftedMixes, ::Pair),
             podcastNewEpisodes,
             savedPodcastShows,
             combine(spotifyHomeFilter, showPodcastSuggestions, homeLayout, ::Triple),
             podcastNewEpisodes.flatMapLatest { episodes ->
                 if (episodes.isEmpty()) flowOf(emptyList()) else database.songEntitiesByIds(episodes.map { it.id })
             },
-        ) { sections, episodes, shows, (filter, showPodcasts, layout), localPlayback ->
+        ) { (sections, crafted), episodes, shows, (filter, showPodcasts, layout), localPlayback ->
             sections?.let {
                 buildSpotifyHome(
                     it,
@@ -316,6 +331,7 @@ class HomeViewModel @Inject constructor(
                     localPlayback.associateBy { song -> song.id },
                     if (showPodcasts) filter else SpotifyHomeFilter.ALL,
                     layout,
+                    crafted,
                 )
             }
         }.stateIn(viewModelScope, SharingStarted.Lazily, null)
@@ -740,6 +756,8 @@ class HomeViewModel @Inject constructor(
             }
 
             homeResult.onSuccess { feed ->
+                // The YouTube Music home call is launched apart so it doesn't hold up the Spotify sections.
+                viewModelScope.launch(Dispatchers.IO) { loadCraftedForYou(feed.sections) }
                 Timber.d("spotifyHome: home() OK — greeting='${feed.greeting}' rawSections=${feed.sections.size}")
                 feed.sections.forEachIndexed { i, s ->
                     Timber.d("spotifyHome:   raw[$i] title='${s.title}' type=${s.typename} items=${s.items.size} totalCount=${s.totalCount}")
@@ -767,6 +785,38 @@ class HomeViewModel @Inject constructor(
 
         homePage.value = null
         explorePage.value = null
+    }
+
+    /**
+     * Fills the "Crafted for you" row with the mixes Spotify made for the user (from its home
+     * [feed]) and, unless the user picked Spotify only, YouTube Music's personal mixes.
+     */
+    private suspend fun loadCraftedForYou(feed: List<SpotifyHomeFeedSection>) {
+        val prefs = context.dataStore.data.first()
+        val source = prefs[SuggestionSourceKey].toEnum(SuggestionSource.MIXED)
+        val sharePercent = prefs[SuggestionYouTubeSharePercentKey] ?: DEFAULT_YOUTUBE_SHARE_PERCENT
+
+        val youTubePlaylists: List<PlaylistItem> = if (source == SuggestionSource.MIXED) {
+            withTimeoutOrNull(CRAFTED_YOUTUBE_TIMEOUT_MS) {
+                collectYouTubeHomePlaylists(maxPages = CRAFTED_YOUTUBE_MAX_PAGES) { continuation ->
+                    YouTube.home(continuation = continuation)
+                        .onFailure { Timber.w(it, "spotifyHome: YouTube home() for mixes FAILED") }
+                        .getOrNull()
+                        ?.let { page ->
+                            YouTubeHomePage(page.sections.flatMap { it.items }.filterIsInstance<PlaylistItem>(), page.continuation)
+                        }
+                }
+            }.orEmpty()
+        } else {
+            emptyList()
+        }
+
+        craftedMixes.value = buildCraftedForYou(
+            spotifyFeed = feed,
+            youTubeHome = youTubePlaylists,
+            config = CraftedConfig(source = source, youTubeShare = youTubeShareFromPercent(sharePercent)),
+        )
+        Timber.d("spotifyHome: crafted for you source=$source mixes=${craftedMixes.value.size}")
     }
 
     /**
@@ -811,7 +861,8 @@ class HomeViewModel @Inject constructor(
                 type = SectionType.ARTISTS,
                 artists = artists.map(::toSpotifyArtist),
             )
-            SectionType.TRACKS, SectionType.SHORTCUTS, SectionType.SHOWS, SectionType.SPEED_DIAL -> null
+            SectionType.TRACKS, SectionType.SHORTCUTS, SectionType.SHOWS, SectionType.SPEED_DIAL,
+            SectionType.CRAFTED_MIXES -> null
         }
     }
 

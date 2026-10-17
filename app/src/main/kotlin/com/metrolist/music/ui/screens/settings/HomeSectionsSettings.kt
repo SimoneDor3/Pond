@@ -58,6 +58,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 fun HomeSectionId.label(): String = when (this) {
     HomeSectionId.SPEED_DIAL -> stringResource(R.string.speed_dial)
     HomeSectionId.SHORTCUTS -> stringResource(R.string.home_section_shortcuts)
+    HomeSectionId.FOR_YOU -> stringResource(R.string.home_section_for_you)
     HomeSectionId.NEW_RELEASES -> stringResource(R.string.spotify_new_releases)
     HomeSectionId.YOUR_SHOWS -> stringResource(R.string.your_shows)
     HomeSectionId.SPOTIFY_FEED -> stringResource(R.string.home_section_spotify_feed)
