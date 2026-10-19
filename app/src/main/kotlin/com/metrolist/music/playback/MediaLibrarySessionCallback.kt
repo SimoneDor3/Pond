@@ -14,6 +14,7 @@ import androidx.core.net.toUri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -123,6 +124,8 @@ constructor(
                 .add(MediaSessionConstants.CommandToggleShuffle)
                 .add(MediaSessionConstants.CommandToggleRepeatMode)
                 .add(MediaSessionConstants.CommandAddToTargetPlaylist)
+                .add(MediaSessionConstants.CommandSeekBackPodcast)
+                .add(MediaSessionConstants.CommandSeekForwardPodcast)
                 .build(),
             connectionResult.availablePlayerCommands,
         )
@@ -143,6 +146,11 @@ constructor(
 
             MediaSessionConstants.ACTION_TOGGLE_REPEAT_MODE -> session.player.toggleRepeatMode()
             MediaSessionConstants.ACTION_ADD_TO_TARGET_PLAYLIST -> addToTargetPlaylist()
+            MediaSessionConstants.ACTION_SEEK_BACK_PODCAST ->
+                session.player.seekBy(-MediaSessionConstants.PODCAST_SEEK_INCREMENT_MS)
+
+            MediaSessionConstants.ACTION_SEEK_FORWARD_PODCAST ->
+                session.player.seekBy(MediaSessionConstants.PODCAST_SEEK_INCREMENT_MS)
         }
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }
@@ -1247,4 +1255,9 @@ internal fun androidAutoPageRequest(
         offset = (safePage.toLong() * effectivePageSize).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
         limit = effectivePageSize,
     )
+}
+
+private fun Player.seekBy(deltaMs: Long) {
+    val upperBound = duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
+    seekTo((currentPosition + deltaMs).coerceIn(0L, upperBound))
 }

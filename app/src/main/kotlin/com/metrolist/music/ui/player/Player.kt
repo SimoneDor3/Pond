@@ -62,6 +62,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedIconButton
@@ -142,6 +143,7 @@ import com.metrolist.music.constants.DarkModeKey
 import com.metrolist.music.constants.HidePlayerThumbnailKey
 import com.metrolist.music.constants.HideStatusBarOnFullscreenKey
 import com.metrolist.music.constants.KeepScreenOn
+import com.metrolist.music.constants.MediaSessionConstants.PODCAST_SEEK_INCREMENT_MS
 import com.metrolist.music.constants.PlayerBackgroundStyle
 import com.metrolist.music.constants.PlayerBackgroundStyleKey
 import com.metrolist.music.constants.PlayerButtonsStyle
@@ -1611,6 +1613,31 @@ fun BottomSheetPlayer(
 
                             Spacer(modifier = Modifier.width(8.dp))
 
+                            if (mediaMetadata.isEpisode) {
+                                FilledIconButton(
+                                    onClick = { playerConnection.seekBy(-PODCAST_SEEK_INCREMENT_MS) },
+                                    enabled = !isListenTogetherGuest,
+                                    shape = RoundedCornerShape(50),
+                                    colors =
+                                        IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = sideButtonContainerColor,
+                                            contentColor = sideButtonContentColor,
+                                        ),
+                                    modifier =
+                                        Modifier
+                                            .height(68.dp)
+                                            .weight(0.45f),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.replay_15),
+                                        contentDescription = stringResource(R.string.seek_back_15),
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+
                             FilledIconButton(
                                 onClick = {
                                     if (isListenTogetherGuest) {
@@ -1678,6 +1705,31 @@ fun BottomSheetPlayer(
                             }
 
                             Spacer(modifier = Modifier.width(8.dp))
+
+                            if (mediaMetadata.isEpisode) {
+                                FilledIconButton(
+                                    onClick = { playerConnection.seekBy(PODCAST_SEEK_INCREMENT_MS) },
+                                    enabled = !isListenTogetherGuest,
+                                    shape = RoundedCornerShape(50),
+                                    colors =
+                                        IconButtonDefaults.filledIconButtonColors(
+                                            containerColor = sideButtonContainerColor,
+                                            contentColor = sideButtonContentColor,
+                                        ),
+                                    modifier =
+                                        Modifier
+                                            .height(68.dp)
+                                            .weight(0.45f),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.forward_15),
+                                        contentDescription = stringResource(R.string.seek_forward_15),
+                                        modifier = Modifier.size(28.dp),
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
 
                             FilledIconButton(
                                 onClick = playerConnection::seekToNext,
@@ -1747,6 +1799,26 @@ fun BottomSheetPlayer(
                                 )
                             }
 
+                            if (mediaMetadata.isEpisode) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    IconButton(
+                                        onClick = { playerConnection.seekBy(-PODCAST_SEEK_INCREMENT_MS) },
+                                        enabled = !isListenTogetherGuest,
+                                        modifier = Modifier.align(Alignment.Center),
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.replay_15),
+                                            contentDescription = stringResource(R.string.seek_back_15),
+                                            tint = TextBackgroundColor,
+                                            modifier =
+                                                Modifier
+                                                    .size(28.dp)
+                                                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                                        )
+                                    }
+                                }
+                            }
+
                             Spacer(Modifier.width(8.dp))
 
                             Box(
@@ -1800,6 +1872,26 @@ fun BottomSheetPlayer(
                             }
 
                             Spacer(Modifier.width(8.dp))
+
+                            if (mediaMetadata.isEpisode) {
+                                Box(modifier = Modifier.weight(1f)) {
+                                    IconButton(
+                                        onClick = { playerConnection.seekBy(PODCAST_SEEK_INCREMENT_MS) },
+                                        enabled = !isListenTogetherGuest,
+                                        modifier = Modifier.align(Alignment.Center),
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.forward_15),
+                                            contentDescription = stringResource(R.string.seek_forward_15),
+                                            tint = TextBackgroundColor,
+                                            modifier =
+                                                Modifier
+                                                    .size(28.dp)
+                                                    .alpha(if (isListenTogetherGuest) 0.5f else 1f),
+                                        )
+                                    }
+                                }
+                            }
 
                             Box(modifier = Modifier.weight(1f)) {
                                 ResizableIconButton(

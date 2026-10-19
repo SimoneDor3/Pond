@@ -412,6 +412,25 @@ class PlayerConnection(
         }
     }
 
+    /**
+     * Seek relative to the current position, clamped to the item bounds - handles Cast when active
+     */
+    fun seekBy(deltaMs: Long) {
+        try {
+            val castHandler = service.castConnectionHandler
+            val (current, duration) =
+                if (castHandler?.isCasting?.value == true) {
+                    castHandler.castPosition.value to castHandler.castDuration.value
+                } else {
+                    player.currentPosition to player.duration
+                }
+            val upperBound = if (duration > 0) duration else Long.MAX_VALUE
+            seekTo((current + deltaMs).coerceIn(0L, upperBound))
+        } catch (e: Exception) {
+            Timber.tag(TAG).e(e, "Error in seekBy")
+        }
+    }
+
     fun seekToNext() {
         try {
             // When casting, use Cast skip instead of local player
