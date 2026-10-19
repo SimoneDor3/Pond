@@ -14,7 +14,6 @@ import androidx.core.net.toUri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Player
 import androidx.media3.exoplayer.offline.Download
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
@@ -51,6 +50,7 @@ import com.metrolist.music.db.MusicDatabase
 import com.metrolist.music.db.entities.PlaylistEntity
 import com.metrolist.music.db.entities.Song
 import com.metrolist.music.extensions.toMediaItem
+import com.metrolist.music.extensions.seekBy
 import com.metrolist.music.extensions.toggleRepeatMode
 import com.metrolist.music.models.toMediaMetadata
 import com.metrolist.music.utils.SpotifyTokenManager
@@ -1255,9 +1255,4 @@ internal fun androidAutoPageRequest(
         offset = (safePage.toLong() * effectivePageSize).coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
         limit = effectivePageSize,
     )
-}
-
-private fun Player.seekBy(deltaMs: Long) {
-    val upperBound = duration.takeIf { it != C.TIME_UNSET } ?: Long.MAX_VALUE
-    seekTo((currentPosition + deltaMs).coerceIn(0L, upperBound))
 }

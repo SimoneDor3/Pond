@@ -33,6 +33,12 @@ fun Player.toggleRepeatMode() {
         }
 }
 
+/** Target of a relative seek, clamped to the item; a non-positive [durationMs] means unknown. */
+fun relativeSeekTarget(positionMs: Long, deltaMs: Long, durationMs: Long): Long =
+    (positionMs + deltaMs).coerceIn(0L, if (durationMs > 0) durationMs else Long.MAX_VALUE)
+
+fun Player.seekBy(deltaMs: Long) = seekTo(relativeSeekTarget(currentPosition, deltaMs, duration))
+
 fun Player.getQueueWindows(): List<Timeline.Window> {
     val timeline = currentTimeline
     if (timeline.isEmpty) {

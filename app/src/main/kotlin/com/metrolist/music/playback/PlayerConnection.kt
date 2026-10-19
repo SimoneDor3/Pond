@@ -29,6 +29,8 @@ import com.metrolist.music.extensions.currentMetadata
 import com.metrolist.music.extensions.getCurrentQueueIndex
 import com.metrolist.music.extensions.getQueueWindows
 import com.metrolist.music.extensions.metadata
+import com.metrolist.music.extensions.relativeSeekTarget
+import com.metrolist.music.extensions.seekBy
 import com.metrolist.music.extensions.togglePlayPause
 import com.metrolist.music.extensions.withUpdatedMetadata
 import com.metrolist.music.models.toMediaMetadata
@@ -418,14 +420,13 @@ class PlayerConnection(
     fun seekBy(deltaMs: Long) {
         try {
             val castHandler = service.castConnectionHandler
-            val (current, duration) =
-                if (castHandler?.isCasting?.value == true) {
-                    castHandler.castPosition.value to castHandler.castDuration.value
-                } else {
-                    player.currentPosition to player.duration
-                }
-            val upperBound = if (duration > 0) duration else Long.MAX_VALUE
-            seekTo((current + deltaMs).coerceIn(0L, upperBound))
+            if (castHandler?.isCasting?.value == true) {
+                castHandler.seekTo(
+                    relativeSeekTarget(castHandler.castPosition.value, deltaMs, castHandler.castDuration.value),
+                )
+            } else {
+                player.seekBy(deltaMs)
+            }
         } catch (e: Exception) {
             Timber.tag(TAG).e(e, "Error in seekBy")
         }
