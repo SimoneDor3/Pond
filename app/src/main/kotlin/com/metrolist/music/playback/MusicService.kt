@@ -163,6 +163,8 @@ import com.metrolist.music.constants.HistoryDuration
 import com.metrolist.music.constants.LastFMUseNowPlaying
 import com.metrolist.music.constants.MediaSessionConstants
 import com.metrolist.music.constants.MediaSessionConstants.CommandAddToTargetPlaylist
+import com.metrolist.music.constants.MediaSessionConstants.CommandSeekBackPodcast
+import com.metrolist.music.constants.MediaSessionConstants.CommandSeekForwardPodcast
 import com.metrolist.music.constants.MediaSessionConstants.CommandToggleLike
 import com.metrolist.music.constants.MediaSessionConstants.CommandToggleRepeatMode
 import com.metrolist.music.constants.MediaSessionConstants.CommandToggleShuffle
@@ -267,6 +269,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -1007,6 +1010,13 @@ class MusicService :
             updateWidgetUI(player.isPlaying)
         }
 
+        // Episodes not stored in the DB keep currentSong null, so watch the episode flag directly
+        currentMediaMetadata
+            .map { it?.isEpisode == true }
+            .distinctUntilChanged()
+            .drop(1)
+            .collect(scope) { updateNotification() }
+
         combine(
             currentMediaMetadata.distinctUntilChangedBy { it?.id },
             dataStore.data.map { it[ShowLyricsKey] ?: false }.distinctUntilChanged(),
@@ -1744,8 +1754,27 @@ class MusicService :
     }
 
     private fun updateNotification(isLiked: Boolean? = currentSong.value?.song?.let { if (it.isEpisode) it.inLibrary != null else it.liked }) {
+        val podcastSeekButtons =
+            if (currentMediaMetadata.value?.isEpisode == true) {
+                listOf(
+                    CommandButton
+                        .Builder()
+                        .setDisplayName(getString(R.string.seek_back_15))
+                        .setIconResId(R.drawable.replay_15)
+                        .setSessionCommand(CommandSeekBackPodcast)
+                        .build(),
+                    CommandButton
+                        .Builder()
+                        .setDisplayName(getString(R.string.seek_forward_15))
+                        .setIconResId(R.drawable.forward_15)
+                        .setSessionCommand(CommandSeekForwardPodcast)
+                        .build(),
+                )
+            } else {
+                emptyList()
+            }
         mediaSession?.setCustomLayout(
-            listOf(
+            podcastSeekButtons + listOf(
                 CommandButton
                     .Builder()
                     .setDisplayName(

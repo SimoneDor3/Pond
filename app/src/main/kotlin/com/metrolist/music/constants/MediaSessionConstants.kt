@@ -15,6 +15,10 @@ object MediaSessionConstants {
     const val ACTION_TOGGLE_SHUFFLE = "TOGGLE_SHUFFLE"
     const val ACTION_TOGGLE_REPEAT_MODE = "TOGGLE_REPEAT_MODE"
     const val ACTION_ADD_TO_TARGET_PLAYLIST = "ADD_TO_TARGET_PLAYLIST"
+    const val ACTION_SEEK_BACK_PODCAST = "SEEK_BACK_PODCAST"
+    const val ACTION_SEEK_FORWARD_PODCAST = "SEEK_FORWARD_PODCAST"
+
+    const val PODCAST_SEEK_INCREMENT_MS = 15_000L
 
     val CommandToggleLibrary = SessionCommand(ACTION_TOGGLE_LIBRARY, Bundle.EMPTY)
     val CommandToggleLike = SessionCommand(ACTION_TOGGLE_LIKE, Bundle.EMPTY)
@@ -22,6 +26,8 @@ object MediaSessionConstants {
     val CommandToggleShuffle = SessionCommand(ACTION_TOGGLE_SHUFFLE, Bundle.EMPTY)
     val CommandToggleRepeatMode = SessionCommand(ACTION_TOGGLE_REPEAT_MODE, Bundle.EMPTY)
     val CommandAddToTargetPlaylist = SessionCommand(ACTION_ADD_TO_TARGET_PLAYLIST, Bundle.EMPTY)
+    val CommandSeekBackPodcast = SessionCommand(ACTION_SEEK_BACK_PODCAST, Bundle.EMPTY)
+    val CommandSeekForwardPodcast = SessionCommand(ACTION_SEEK_FORWARD_PODCAST, Bundle.EMPTY)
 
     const val TARGET_PLAYLIST_AUTO = "auto"
 }

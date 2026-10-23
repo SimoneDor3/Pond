@@ -50,6 +50,7 @@ import com.metrolist.music.db.MusicDatabase
 import com.metrolist.music.db.entities.PlaylistEntity
 import com.metrolist.music.db.entities.Song
 import com.metrolist.music.extensions.toMediaItem
+import com.metrolist.music.extensions.seekBy
 import com.metrolist.music.extensions.toggleRepeatMode
 import com.metrolist.music.models.toMediaMetadata
 import com.metrolist.music.utils.SpotifyTokenManager
@@ -123,6 +124,8 @@ constructor(
                 .add(MediaSessionConstants.CommandToggleShuffle)
                 .add(MediaSessionConstants.CommandToggleRepeatMode)
                 .add(MediaSessionConstants.CommandAddToTargetPlaylist)
+                .add(MediaSessionConstants.CommandSeekBackPodcast)
+                .add(MediaSessionConstants.CommandSeekForwardPodcast)
                 .build(),
             connectionResult.availablePlayerCommands,
         )
@@ -143,6 +146,11 @@ constructor(
 
             MediaSessionConstants.ACTION_TOGGLE_REPEAT_MODE -> session.player.toggleRepeatMode()
             MediaSessionConstants.ACTION_ADD_TO_TARGET_PLAYLIST -> addToTargetPlaylist()
+            MediaSessionConstants.ACTION_SEEK_BACK_PODCAST ->
+                session.player.seekBy(-MediaSessionConstants.PODCAST_SEEK_INCREMENT_MS)
+
+            MediaSessionConstants.ACTION_SEEK_FORWARD_PODCAST ->
+                session.player.seekBy(MediaSessionConstants.PODCAST_SEEK_INCREMENT_MS)
         }
         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
     }

@@ -1219,4 +1219,6 @@
     <string name="home_section_shortcuts">Shortcuts and podcasts</string>
     <string name="home_section_spotify_feed">Spotify recommendations</string>
     <string name="home_section_for_you">Crafted for you</string>
+    <string name="seek_back_15">Back 15 seconds</string>
+    <string name="seek_forward_15">Forward 15 seconds</string>
 </resources>
