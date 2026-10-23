@@ -104,6 +104,7 @@ val CheckForUpdatesKey = booleanPreferencesKey("checkForUpdates")
 val DismissedStandaloneUpdateKey = stringPreferencesKey("dismissedStandaloneUpdate")
 val DismissedKmpUpdateKey = stringPreferencesKey("dismissedKmpUpdate")
 val UpdateNotificationsEnabledKey = booleanPreferencesKey("updateNotifications")
+val DevModeKey = booleanPreferencesKey("devMode")
 
 val AudioQualityKey = stringPreferencesKey("audioQuality")
 

@@ -98,6 +98,7 @@ object Updater {
             val (arch, variant) = when {
                 name == "Pond.apk" -> "universal" to "foss"
                 name == "Pond-with-Google-Cast.apk" -> "universal" to "gms"
+                name == "Metrolist-with-Google-Cast.apk" -> "universal" to "gms" // nightly
                 name.startsWith("app-") && name.endsWith("-release.apk") -> {
                     val arch = name.removePrefix("app-").removeSuffix("-release.apk")
                     arch to "foss"
