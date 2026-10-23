@@ -24,6 +24,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -40,11 +42,13 @@ import com.metrolist.music.BuildConfig
 import com.metrolist.music.LocalPlayerAwareWindowInsets
 import com.metrolist.music.R
 import com.metrolist.music.constants.CheckForUpdatesKey
+import com.metrolist.music.constants.DevModeKey
 import com.metrolist.music.constants.UpdateNotificationsEnabledKey
 import com.metrolist.music.ui.component.IconButton
 import com.metrolist.music.ui.component.Material3SettingsGroup
 import com.metrolist.music.ui.component.Material3SettingsItem
 import com.metrolist.music.ui.utils.backToMain
+import com.metrolist.music.utils.ReleaseInfo
 import com.metrolist.music.utils.Updater
 import com.metrolist.music.utils.rememberPreference
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +62,9 @@ fun UpdaterScreen(
 ) {
     val (checkForUpdates, onCheckForUpdatesChange) = rememberPreference(CheckForUpdatesKey, true)
     val (updateNotifications, onUpdateNotificationsChange) = rememberPreference(UpdateNotificationsEnabledKey, true)
+    val (devMode, onDevModeChange) = rememberPreference(DevModeKey, false)
+    val uriHandler = LocalUriHandler.current
+    var allReleases by remember { mutableStateOf<List<ReleaseInfo>>(emptyList()) }
 
     val context = LocalContext.current
     var isChecking by remember { mutableStateOf(false) }
@@ -69,6 +76,15 @@ fun UpdaterScreen(
     val failedToCheckUpdatesTemplate = stringResource(R.string.failed_to_check_updates)
 
     val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(devMode) {
+        if (devMode) {
+            Updater
+                .getAllReleases(forceRefresh = true)
+                .onSuccess { allReleases = it }
+                .onFailure { checkError = String.format(failedToCheckUpdatesTemplate, it.message ?: "Unknown error") }
+        }
+    }
 
     fun performManualCheck() {
         coroutineScope.launch {
@@ -165,6 +181,21 @@ fun UpdaterScreen(
                             ),
                         )
                     }
+
+                    add(
+                        Material3SettingsItem(
+                            title = { Text(stringResource(R.string.dev_mode)) },
+                            description = { Text(stringResource(R.string.dev_mode_description)) },
+                            icon = painterResource(R.drawable.bug_report),
+                            trailingContent = {
+                                Switch(
+                                    checked = devMode,
+                                    onCheckedChange = onDevModeChange,
+                                )
+                            },
+                            onClick = { onDevModeChange(!devMode) },
+                        ),
+                    )
                 },
         )
 
@@ -237,6 +268,27 @@ fun UpdaterScreen(
                             .padding(16.dp),
                 )
             }
+        }
+
+        if (devMode && allReleases.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Material3SettingsGroup(
+                title = stringResource(R.string.all_versions),
+                items =
+                    allReleases.mapNotNull { release ->
+                        // Nightly ships only the universal GMS APK, so fall back to any APK.
+                        val downloadUrl =
+                            Updater.getDownloadUrlForCurrentVariant(release)
+                                ?: release.assets.firstOrNull()?.downloadUrl
+                                ?: return@mapNotNull null
+                        Material3SettingsItem(
+                            icon = painterResource(R.drawable.download),
+                            title = { Text(release.versionName) },
+                            description = { Text("${release.tagName} · ${release.releaseDate.substringBefore('T')}") },
+                            onClick = { uriHandler.openUri(downloadUrl) },
+                        )
+                    },
+            )
         }
 
         Spacer(Modifier.height(32.dp))
