@@ -1,11 +1,11 @@
 package com.metrolist.music.models
 
 import com.metrolist.innertube.models.Album
+import com.metrolist.innertube.models.AlbumItem
 import com.metrolist.innertube.models.Artist
 import com.metrolist.innertube.models.PodcastItem
 import com.metrolist.innertube.models.SongItem
 import com.metrolist.music.db.entities.SongEntity
-import com.metrolist.spotify.models.SpotifyHomeFeedItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -34,9 +34,8 @@ class SpotifyHomeBuildTest {
     private fun played(id: String, positionMs: Long, durationSec: Int = 3600) =
         SongEntity(id = id, title = "Episode $id", duration = durationSec, playbackPosition = positionMs)
 
-    private fun playlist(n: Int) = SpotifyHomeFeedItem.Playlist(
-        uri = "spotify:playlist:$n", id = "$n", name = "Playlist $n", description = null, format = null,
-        totalCount = 0, imageUrl = null, extractedColorHex = null, ownerName = null, madeForUsername = null,
+    private fun album(n: Int) = AlbumItem(
+        browseId = "MPRE$n", playlistId = "OLAK$n", title = "Album $n", artists = null, thumbnail = "https://album/$n.jpg",
     )
 
     private fun show(id: String, title: String, author: String? = null) = PodcastItem(
@@ -49,9 +48,7 @@ class SpotifyHomeBuildTest {
     private fun podcasts(episodes: List<SongItem>, shows: List<PodcastItem> = emptyList(), local: Map<String, SongEntity> = emptyMap()) =
         buildSpotifyHome(emptyList(), episodes, shows, local, SpotifyHomeFilter.PODCASTS).first().podcasts
 
-    private val spotifyGrid = SpotifyHomeSection(
-        title = "", type = SectionType.SHORTCUTS, shortcuts = (1..6).map(::playlist),
-    )
+    private val musicShortcuts = (1..6).map(::album)
     private val spotifyMusic = (1..6).map { SpotifyHomeSection(title = "Music $it", type = SectionType.PLAYLISTS) }
 
     @Test
@@ -204,7 +201,7 @@ class SpotifyHomeBuildTest {
             "half-older" to played("half-older", positionMs = 900_000),
         )
 
-        val home = buildSpotifyHome(listOf(spotifyGrid) + spotifyMusic, episodes, listOf(show), local, SpotifyHomeFilter.ALL)
+        val home = buildSpotifyHome(spotifyMusic, episodes, listOf(show), local, SpotifyHomeFilter.ALL, musicShortcuts = musicShortcuts)
             .drop(1)
 
         val grid = home.first()
@@ -213,43 +210,54 @@ class SpotifyHomeBuildTest {
         assertEquals(listOf("Show half", "Show new1", "Show new2", "Show new3"), grid.podcasts.map { it.title })
         assertEquals(listOf("half", "half-older"), grid.podcasts.first().episodes.map { it.song.id })
         assertEquals(0.5f, grid.podcasts.first().progress!!, 0.001f)
-        assertEquals(4, grid.shortcuts.size)
+        assertEquals(musicShortcuts.take(4), grid.shortcuts)
         assertEquals(listOf(SectionType.SHORTCUTS, SectionType.SHOWS), home.take(2).map { it.type })
         assertEquals(1 + 1 + spotifyMusic.size, home.size)
     }
 
     @Test
-    fun `music view is Spotify only, podcasts view is YouTube only`() {
+    fun `music view has no podcasts, podcasts view has no music`() {
         val episodes = listOf(episode("a"))
-        val sections = listOf(spotifyGrid) + spotifyMusic
 
-        assertEquals(sections, buildSpotifyHome(sections, episodes, listOf(show), emptyMap(), SpotifyHomeFilter.MUSIC))
+        val music = buildSpotifyHome(spotifyMusic, episodes, listOf(show), emptyMap(), SpotifyHomeFilter.MUSIC, musicShortcuts = musicShortcuts)
+        assertEquals(musicShortcuts, music.first().shortcuts)
+        assertTrue(music.first().podcasts.isEmpty())
+        assertEquals(spotifyMusic, music.drop(1))
 
-        val podcasts = buildSpotifyHome(sections, episodes, listOf(show), emptyMap(), SpotifyHomeFilter.PODCASTS)
+        val podcasts = buildSpotifyHome(spotifyMusic, episodes, listOf(show), emptyMap(), SpotifyHomeFilter.PODCASTS, musicShortcuts = musicShortcuts)
         assertEquals(listOf(SectionType.SHORTCUTS, SectionType.SHOWS), podcasts.map { it.type })
         assertTrue(podcasts.first().shortcuts.isEmpty())
     }
 
     @Test
-    fun `without YouTube podcasts the all view equals today's Spotify home`() {
-        val sections = listOf(spotifyGrid) + spotifyMusic
-        val home = buildSpotifyHome(sections, emptyList(), emptyList(), emptyMap(), SpotifyHomeFilter.ALL)
+    fun `without podcasts the grid is all music, then the Spotify feed`() {
+        val home = buildSpotifyHome(spotifyMusic, emptyList(), emptyList(), emptyMap(), SpotifyHomeFilter.ALL, musicShortcuts = musicShortcuts)
         assertEquals(SectionType.SPEED_DIAL, home[0].type)
-        assertEquals(6, home[1].shortcuts.size)
-        assertEquals(sections.drop(1), home.drop(2))
+        assertEquals(musicShortcuts, home[1].shortcuts)
+        assertEquals(spotifyMusic, home.drop(2))
     }
 
-    private val newReleases = SpotifyHomeSection(title = "spotify_new_releases", type = SectionType.ALBUMS)
+    @Test
+    fun `new releases are a YouTube Music row`() {
+        val home = buildSpotifyHome(spotifyMusic, emptyList(), emptyList(), emptyMap(), SpotifyHomeFilter.ALL, newReleases = musicShortcuts)
+        val releases = home.single { it.title == NEW_RELEASES_TITLE }
+        assertEquals(SectionType.YOUTUBE_ITEMS, releases.type)
+        assertEquals(musicShortcuts, releases.items)
+    }
+
     private val topTracks = SpotifyHomeSection(title = "spotify_top_tracks", type = SectionType.TRACKS)
 
-    // Mirrors HomeViewModel: top tracks and new releases first, then Spotify's feed.
-    private val loadedSections = listOf(topTracks, newReleases, spotifyGrid) + spotifyMusic.take(3)
+    // Mirrors HomeViewModel: Spotify's feed only; the grid and new releases come from YouTube Music.
+    private val loadedSections = listOf(topTracks) + spotifyMusic.take(3)
 
     private fun layout(vararg sections: HomeSectionId, hidden: Set<HomeSectionId> = emptySet()) =
         sections.map { HomeSectionSetting(it, it !in hidden) }
 
     private fun home(filter: SpotifyHomeFilter, layout: List<HomeSectionSetting>) =
-        buildSpotifyHome(loadedSections, listOf(episode("a")), listOf(show), emptyMap(), filter, layout)
+        buildSpotifyHome(
+            loadedSections, listOf(episode("a")), listOf(show), emptyMap(), filter, layout,
+            musicShortcuts = musicShortcuts, newReleases = musicShortcuts,
+        )
             .map { if (it.type == SectionType.SHORTCUTS) "grid" else it.title.ifEmpty { it.type.name } }
 
     private val customLayout = layout(

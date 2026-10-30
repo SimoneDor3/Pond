@@ -143,7 +143,6 @@ import com.metrolist.music.playback.SpotifyYouTubeMapper
 import com.metrolist.music.playback.queues.SpotifyPlaylistQueue
 import com.metrolist.music.playback.queues.SpotifyQueue
 import com.metrolist.spotify.Spotify
-import com.metrolist.spotify.models.SpotifyHomeFeedItem
 import timber.log.Timber
 import com.metrolist.music.ui.component.YouTubeListItem
 import com.metrolist.music.ui.component.AlbumGridItem
@@ -2672,9 +2671,10 @@ fun HomeScreen(
                                         section = section,
                                         onShortcutClick = { item ->
                                             when (item) {
-                                                is SpotifyHomeFeedItem.Playlist -> navController.navigate("spotify_playlist/${item.id}")
-                                                is SpotifyHomeFeedItem.Album -> navController.navigate("spotify_album/${item.id}")
-                                                is SpotifyHomeFeedItem.Artist -> openSpotifyArtist(item.name)
+                                                is AlbumItem -> navController.navigate("album/${item.id}")
+                                                is ArtistItem -> navController.navigate("artist/${item.id}")
+                                                is PlaylistItem -> navigateToPlaylist(item.id)
+                                                else -> Unit
                                             }
                                         },
                                         onPodcastClick = { podcast ->
@@ -2694,6 +2694,18 @@ fun HomeScreen(
                                         },
                                         modifier = Modifier.animateItem(),
                                     )
+                                }
+                                SectionType.YOUTUBE_ITEMS -> {
+                                    LazyRow(
+                                        contentPadding = WindowInsets.systemBars
+                                            .only(WindowInsetsSides.Horizontal)
+                                            .asPaddingValues(),
+                                        modifier = Modifier.animateItem(),
+                                    ) {
+                                        items(section.items, key = { "spotify_home_yt_${it.id}" }) { item ->
+                                            ytGridItem(item)
+                                        }
+                                    }
                                 }
                                 SectionType.SHOWS -> {
                                     LazyRow(
