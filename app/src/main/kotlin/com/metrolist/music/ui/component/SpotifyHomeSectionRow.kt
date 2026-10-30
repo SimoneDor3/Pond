@@ -48,7 +48,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import coil3.compose.AsyncImage
 import com.metrolist.innertube.models.Artist
+import com.metrolist.innertube.models.ArtistItem
 import com.metrolist.innertube.models.PlaylistItem
+import com.metrolist.innertube.models.YTItem
 import com.metrolist.music.R
 import com.metrolist.music.constants.GridThumbnailHeight
 import com.metrolist.music.constants.ListItemHeight
@@ -65,7 +67,6 @@ import com.metrolist.music.utils.toSongItem
 import com.metrolist.spotify.SpotifyMapper
 import com.metrolist.spotify.models.SpotifyAlbum
 import com.metrolist.spotify.models.SpotifyArtist
-import com.metrolist.spotify.models.SpotifyHomeFeedItem
 import com.metrolist.spotify.models.SpotifyPlaylist
 import com.metrolist.spotify.models.SpotifyTrack
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -321,13 +322,13 @@ private class ShortcutTile(
 /**
  * Spotify-style untitled shortcuts grid: two columns of compact cover + title tiles.
  * YouTube Music podcasts come first (dot for a new episode, bar when one is in progress), then
- * Spotify's music shortcuts. Not lazy on purpose: it sits inside the home LazyColumn
+ * YouTube Music's music shortcuts. Not lazy on purpose: it sits inside the home LazyColumn
  * and holds a handful of items.
  */
 @Composable
 fun SpotifyShortcutGrid(
     section: SpotifyHomeSection,
-    onShortcutClick: (SpotifyHomeFeedItem) -> Unit,
+    onShortcutClick: (YTItem) -> Unit,
     onPodcastClick: (HomePodcast) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -340,11 +341,7 @@ fun SpotifyShortcutGrid(
             onClick = { onPodcastClick(podcast) },
         )
     } + section.shortcuts.map { item ->
-        when (item) {
-            is SpotifyHomeFeedItem.Playlist -> ShortcutTile(item.name, item.imageUrl, onClick = { onShortcutClick(item) })
-            is SpotifyHomeFeedItem.Album -> ShortcutTile(item.name, item.imageUrl, onClick = { onShortcutClick(item) })
-            is SpotifyHomeFeedItem.Artist -> ShortcutTile(item.name, item.imageUrl, isCircle = true, onClick = { onShortcutClick(item) })
-        }
+        ShortcutTile(item.title, item.thumbnail, isCircle = item is ArtistItem, onClick = { onShortcutClick(item) })
     }
 
     Column(

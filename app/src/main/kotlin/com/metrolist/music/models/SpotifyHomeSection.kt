@@ -7,18 +7,18 @@ package com.metrolist.music.models
 
 import com.metrolist.innertube.models.PodcastItem
 import com.metrolist.innertube.models.SongItem
+import com.metrolist.innertube.models.YTItem
 import com.metrolist.music.db.entities.SongEntity
 import com.metrolist.spotify.models.SpotifyAlbum
 import com.metrolist.spotify.models.SpotifyArtist
-import com.metrolist.spotify.models.SpotifyHomeFeedItem
 import com.metrolist.spotify.models.SpotifyPlaylist
 import com.metrolist.spotify.models.SpotifyTrack
 
 /**
  * Represents a section in the Spotify-powered home screen.
  * Each section has a title and contains one type of content, except the untitled
- * [SectionType.SHORTCUTS] grid, which mixes Spotify music [shortcuts] with
- * YouTube Music [podcasts].
+ * [SectionType.SHORTCUTS] grid, which mixes YouTube Music [podcasts] with YouTube Music
+ * music [shortcuts].
  */
 data class SpotifyHomeSection(
     val title: String,
@@ -27,10 +27,11 @@ data class SpotifyHomeSection(
     val artists: List<SpotifyArtist> = emptyList(),
     val albums: List<SpotifyAlbum> = emptyList(),
     val playlists: List<SpotifyPlaylist> = emptyList(),
-    val shortcuts: List<SpotifyHomeFeedItem> = emptyList(),
+    val shortcuts: List<YTItem> = emptyList(),
     val podcasts: List<HomePodcast> = emptyList(),
     val shows: List<PodcastItem> = emptyList(),
     val crafted: List<CraftedMix> = emptyList(),
+    val items: List<YTItem> = emptyList(),
 )
 
 enum class SectionType {
@@ -43,6 +44,9 @@ enum class SectionType {
 
     /** Personal mixes from Spotify and YouTube Music, drawn like [PLAYLISTS]. */
     CRAFTED_MIXES,
+
+    /** YouTube Music [SpotifyHomeSection.items] drawn as a row of grid cards. */
+    YOUTUBE_ITEMS,
 
     /** Placeholder for the speed dial, which the home screen renders from its own data. */
     SPEED_DIAL,
@@ -78,14 +82,15 @@ enum class SpotifyHomeFilter {
     PODCASTS,
 }
 
-private const val ALL_GRID_SIZE = 8
 private const val ALL_GRID_MAX_PODCASTS = 4
 
-private const val NEW_RELEASES_TITLE = "spotify_new_releases"
+const val NEW_RELEASES_TITLE = "spotify_new_releases"
 
 /**
- * Builds the visible Spotify home. Spotify provides the music [spotifySections];
- * podcasts come from YouTube Music: [newEpisodes] of followed [shows]. [localPlayback]
+ * Builds the visible Spotify home. Spotify provides the music feed [spotifySections] (history-based
+ * suggestions); everything else comes from YouTube Music: podcasts are [newEpisodes] of followed
+ * [shows], the grid's music tiles are [musicShortcuts] (see [pickYouTubeShortcuts]) and the
+ * "New releases" row is [newReleases] (see [rankNewReleases]). [localPlayback]
  * (video ID → song row) holds Meld's saved positions, which drive the dot and bar.
  * [crafted] fills the "Crafted for you" row (see [buildCraftedForYou]), shown with music; while it
  * shows, its Spotify mixes are left out of the feed.
@@ -100,6 +105,8 @@ fun buildSpotifyHome(
     filter: SpotifyHomeFilter,
     layout: List<HomeSectionSetting> = DefaultHomeLayout,
     crafted: List<CraftedMix> = emptyList(),
+    musicShortcuts: List<YTItem> = emptyList(),
+    newReleases: List<YTItem> = emptyList(),
 ): List<SpotifyHomeSection> {
     val episodes = newEpisodes
         .distinctBy { it.id }
@@ -109,10 +116,9 @@ fun buildSpotifyHome(
         .sortedBy { if (it.progress != null) 0 else if (it.hasNew) 1 else 2 }
     val showsSection = shows.takeIf { it.isNotEmpty() }
         ?.let { SpotifyHomeSection(title = "your_shows", type = SectionType.SHOWS, shows = it.distinctBy { show -> show.id }) }
-    val musicShortcuts = spotifySections.firstOrNull { it.type == SectionType.SHORTCUTS }
-
     val shortcuts = when (filter) {
-        SpotifyHomeFilter.MUSIC -> musicShortcuts
+        SpotifyHomeFilter.MUSIC -> musicShortcuts.takeIf { it.isNotEmpty() }
+            ?.let { SpotifyHomeSection(title = "", type = SectionType.SHORTCUTS, shortcuts = it.take(SHORTCUT_GRID_SIZE)) }
         SpotifyHomeFilter.PODCASTS -> podcasts.takeIf { it.isNotEmpty() }
             ?.let { SpotifyHomeSection(title = "", type = SectionType.SHORTCUTS, podcasts = it) }
         SpotifyHomeFilter.ALL -> {
@@ -120,13 +126,15 @@ fun buildSpotifyHome(
             SpotifyHomeSection(
                 title = "",
                 type = SectionType.SHORTCUTS,
-                shortcuts = musicShortcuts?.shortcuts.orEmpty().take(ALL_GRID_SIZE - gridPodcasts.size),
+                shortcuts = musicShortcuts.take(SHORTCUT_GRID_SIZE - gridPodcasts.size),
                 podcasts = gridPodcasts,
             ).takeIf { it.shortcuts.isNotEmpty() || it.podcasts.isNotEmpty() }
         }
     }
     val showMusic = filter != SpotifyHomeFilter.PODCASTS
     val showPodcasts = filter != SpotifyHomeFilter.MUSIC
+    val newReleasesSection = newReleases.takeIf { it.isNotEmpty() }
+        ?.let { SpotifyHomeSection(title = NEW_RELEASES_TITLE, type = SectionType.YOUTUBE_ITEMS, items = it) }
     val craftedSection = crafted.takeIf { it.isNotEmpty() }
         ?.let { SpotifyHomeSection(title = CRAFTED_FOR_YOU_TITLE, type = SectionType.CRAFTED_MIXES, crafted = it) }
     val craftedSpotifyIds = if (craftedSection != null && layout.any { it.section == HomeSectionId.FOR_YOU && it.visible }) {
@@ -143,16 +151,9 @@ fun buildSpotifyHome(
             HomeSectionId.SHORTCUTS -> listOfNotNull(shortcuts)
             HomeSectionId.FOR_YOU -> listOfNotNull(craftedSection?.takeIf { showMusic })
             HomeSectionId.YOUR_SHOWS -> listOfNotNull(showsSection?.takeIf { showPodcasts })
-            HomeSectionId.NEW_RELEASES ->
-                if (showMusic) spotifySections.filter { it.title == NEW_RELEASES_TITLE } else emptyList()
+            HomeSectionId.NEW_RELEASES -> listOfNotNull(newReleasesSection?.takeIf { showMusic })
             HomeSectionId.SPOTIFY_FEED ->
-                if (showMusic) {
-                    spotifySections
-                        .filter { it.type != SectionType.SHORTCUTS && it.title != NEW_RELEASES_TITLE }
-                        .mapNotNull { it.withoutPlaylists(craftedSpotifyIds) }
-                } else {
-                    emptyList()
-                }
+                if (showMusic) spotifySections.mapNotNull { it.withoutPlaylists(craftedSpotifyIds) } else emptyList()
         }
     }
 }
