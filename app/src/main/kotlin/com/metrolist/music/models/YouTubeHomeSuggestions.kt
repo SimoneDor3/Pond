@@ -35,23 +35,38 @@ fun pickYouTubeShortcuts(shelves: List<List<YTItem>>, count: Int = SHORTCUT_GRID
 }
 
 /**
- * Builds the "New releases" row: releases by the artists the user listens to ([fromListening] plus
- * any [popular] one by such an artist), newest first and then by how much the artist is played
- * ([artistRank], 0 = most played), filling up to half the row; then YouTube Music's [popular]
- * releases. Personal releases left over go last when the popular ones run out.
+ * Splits new releases into those by the artists the user listens to ([fromListening], plus any
+ * [popular] one by an artist in [artistRank] or [followed]), newest first and then by how much the
+ * artist is played ([artistRank], 0 = most played), and the remaining [popular] ones in chart order.
+ */
+fun splitNewReleases(
+    fromListening: List<AlbumItem>,
+    popular: List<AlbumItem>,
+    artistRank: Map<String, Int>,
+    followed: Set<String> = emptySet(),
+): Pair<List<AlbumItem>, List<AlbumItem>> {
+    fun AlbumItem.artistIds() = artists.orEmpty().mapNotNull { it.id }
+    fun AlbumItem.rank() = artistIds().mapNotNull(artistRank::get).minOrNull()
+
+    val personal = (fromListening + popular.filter { album -> album.rank() != null || album.artistIds().any { it in followed } })
+        .distinctBy { it.id }
+        .sortedWith(compareByDescending<AlbumItem> { it.year ?: 0 }.thenBy { it.rank() ?: Int.MAX_VALUE })
+    val personalIds = personal.mapTo(mutableSetOf()) { it.id }
+    return personal to popular.filter { it.id !in personalIds }.distinctBy { it.id }
+}
+
+/**
+ * Builds the home "New releases" row: the user's releases (see [splitNewReleases]) fill up to half
+ * the row, then the popular ones; personal releases left over go last when the popular ones run out.
  */
 fun rankNewReleases(
     fromListening: List<AlbumItem>,
     popular: List<AlbumItem>,
     artistRank: Map<String, Int>,
+    followed: Set<String> = emptySet(),
     limit: Int = NEW_RELEASES_SIZE,
 ): List<AlbumItem> {
-    fun AlbumItem.rank() = artists.orEmpty().mapNotNull { artist -> artist.id?.let(artistRank::get) }.minOrNull()
-
-    val personal = (fromListening + popular.filter { it.rank() != null })
-        .distinctBy { it.id }
-        .sortedWith(compareByDescending<AlbumItem> { it.year ?: 0 }.thenBy { it.rank() ?: Int.MAX_VALUE })
-    val personalIds = personal.mapTo(mutableSetOf()) { it.id }
+    val (personal, others) = splitNewReleases(fromListening, popular, artistRank, followed)
     val head = personal.take(limit / 2)
-    return (head + popular.filter { it.id !in personalIds }.distinctBy { it.id } + personal.drop(head.size)).take(limit)
+    return (head + others + personal.drop(head.size)).take(limit)
 }

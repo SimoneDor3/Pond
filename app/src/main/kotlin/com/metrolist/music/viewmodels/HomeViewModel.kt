@@ -81,6 +81,7 @@ import com.metrolist.music.ui.screens.wrapped.WrappedManager
 import com.metrolist.music.utils.NetworkConnectivityObserver
 import com.metrolist.music.utils.SyncUtils
 import com.metrolist.music.utils.dataStore
+import com.metrolist.music.utils.fetchYouTubeReleaseSources
 import com.metrolist.music.utils.safeDataStoreEdit
 import com.metrolist.music.utils.get
 import com.metrolist.music.utils.reportException
@@ -91,7 +92,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -124,8 +124,6 @@ data class CommunityPlaylistItem(
 
 private const val CRAFTED_YOUTUBE_TIMEOUT_MS = 15_000L
 private const val CRAFTED_YOUTUBE_MAX_PAGES = 5
-private const val NEW_RELEASE_SEED_ARTISTS = 6
-private const val NEW_RELEASE_WINDOW_MONTHS = 3L
 
 private data class HomeMusic(
     val sections: List<SpotifyHomeSection>?,
@@ -804,39 +802,12 @@ class HomeViewModel @Inject constructor(
 
     /**
      * Fills the "New releases" row with recent releases from the artists the user plays most
-     * (read from their YouTube Music artist pages) and YouTube Music's popular new releases.
+     * and YouTube Music's popular new releases.
      */
     private suspend fun loadNewReleases(hideExplicit: Boolean) {
-        val since = LocalDateTime.now().minusMonths(NEW_RELEASE_WINDOW_MONTHS)
-        val topArtists = database.mostPlayedArtists(since, limit = 20).first().filter { it.artist.isYouTubeArtist }
-        val artistRank = topArtists.withIndex().associate { (index, artist) -> artist.id to index }
-        // Artist pages only give a release year, so "recent" means released this year (or last year early on).
-        val minYear = since.year
-
-        val (fromListening, popular) = coroutineScope {
-            val popularDeferred = async {
-                YouTube.newReleaseAlbums().onFailure { Timber.w(it, "spotifyHome: YouTube newReleaseAlbums() FAILED") }
-                    .getOrNull().orEmpty()
-            }
-            val fromArtists = topArtists.take(NEW_RELEASE_SEED_ARTISTS).map { seed ->
-                async {
-                    YouTube.artist(seed.id).getOrNull()?.sections.orEmpty()
-                        .flatMap { it.items.filterOutNulls() }
-                        .filterIsInstance<AlbumItem>()
-                        .filter { (it.year ?: 0) >= minYear }
-                        // Artist pages leave the artist out of their own releases.
-                        .map { it.copy(artists = it.artists ?: listOf(Artist(name = seed.artist.name, id = seed.id))) }
-                }
-            }
-            fromArtists.awaitAll().flatten() to popularDeferred.await()
-        }
-
-        youTubeNewReleases.value = rankNewReleases(
-            fromListening = fromListening.filterExplicit(hideExplicit),
-            popular = popular.filterOutNulls().filterExplicit(hideExplicit),
-            artistRank = artistRank,
-        )
-        Timber.d("spotifyHome: new releases = ${youTubeNewReleases.value.size} (${fromListening.size} from listening, ${popular.size} popular)")
+        val sources = fetchYouTubeReleaseSources(database, hideExplicit)
+        youTubeNewReleases.value = rankNewReleases(sources.fromListening, sources.popular, sources.artistRank, sources.followed)
+        Timber.d("spotifyHome: new releases = ${youTubeNewReleases.value.size} (${sources.fromListening.size} from listening, ${sources.popular.size} popular)")
     }
 
     /**

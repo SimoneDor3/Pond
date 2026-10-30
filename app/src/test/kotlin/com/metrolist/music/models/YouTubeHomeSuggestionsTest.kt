@@ -51,6 +51,18 @@ class YouTubeHomeSuggestionsTest {
     }
 
     @Test
+    fun `split keeps bookmarked artists' popular releases with the user's, the rest for discovery`() {
+        val (following, discover) = splitNewReleases(
+            fromListening = listOf(album("mine", "top", 2026)),
+            popular = listOf(album("hit", "x"), album("saved", "bookmarked"), album("mine", "top", 2026)),
+            artistRank = mapOf("top" to 0),
+            followed = setOf("bookmarked"),
+        )
+        assertEquals(listOf("mine", "saved"), following.map { it.id })
+        assertEquals(listOf("hit"), discover.map { it.id })
+    }
+
+    @Test
     fun `popular releases fill the row when nothing comes from listening`() {
         val popular = (1..5).map { album("hit$it", "x") }
         assertEquals(popular.take(3), rankNewReleases(emptyList(), popular, emptyMap(), limit = 3))
